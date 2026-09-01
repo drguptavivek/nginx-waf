@@ -3,6 +3,7 @@ FROM ${NGINX_CERTBOT_IMAGE} AS build
 ARG NGINX_VERSION=1.31.4
 ARG MODSECURITY_VERSION=v3.0.16
 ARG MODSECURITY_NGINX_VERSION=v1.0.4
+ARG CRS_VERSION=v4.25.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     autoconf automake build-essential ca-certificates curl git libcurl4-openssl-dev \
@@ -20,16 +21,37 @@ RUN set -eux; installed="$(nginx -v 2>&1 | sed 's#^nginx version: nginx/##')"; \
     curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"; \
     tar -xzf "nginx-${NGINX_VERSION}.tar.gz"; \
     git clone --branch "${MODSECURITY_NGINX_VERSION}" --depth 1 https://github.com/owasp-modsecurity/ModSecurity-nginx.git; \
+    git clone --depth 1 https://github.com/openresty/headers-more-nginx-module.git; \
     cd "nginx-${NGINX_VERSION}"; args="$(nginx -V 2>&1 | sed -n 's/^configure arguments: //p')"; \
-    eval "./configure ${args} --with-compat --add-dynamic-module=/usr/src/ModSecurity-nginx"; \
-    make modules; test -s objs/ngx_http_modsecurity_module.so
+    eval "./configure ${args} --with-compat \
+      --add-dynamic-module=/usr/src/ModSecurity-nginx \
+      --add-dynamic-module=/usr/src/headers-more-nginx-module"; \
+    make modules; \
+    test -s objs/ngx_http_modsecurity_module.so; \
+    test -s objs/ngx_http_headers_more_filter_module.so
 
 FROM ${NGINX_CERTBOT_IMAGE}
+ARG CRS_VERSION=v4.25.1
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libcurl4t64 libgeoip1t64 liblmdb0 libmaxminddb0 libxml2 libyajl2 \
+      curl libcurl4t64 libgeoip1t64 liblmdb0 libmaxminddb0 libxml2 libyajl2 \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /usr/lib/nginx/modules /etc/nginx/modules-enabled /etc/modsecurity
+ && mkdir -p /usr/lib/nginx/modules /etc/nginx/modules-enabled /etc/modsecurity/crs/rules /usr/share/doc/nginx-modsecurity
 COPY --from=build /usr/lib/libmodsecurity.so* /usr/lib/
 COPY --from=build /usr/src/nginx-1.31.4/objs/ngx_http_modsecurity_module.so /usr/lib/nginx/modules/
-RUN printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;' > /etc/nginx/modules-enabled/50-modsecurity.conf && ldconfig
+COPY --from=build /usr/src/nginx-1.31.4/objs/ngx_http_headers_more_filter_module.so /usr/lib/nginx/modules/
+COPY THIRD-PARTY-NOTICES /usr/share/doc/nginx-modsecurity/THIRD-PARTY-NOTICES
+COPY 00-modsecurity.conf /etc/nginx/conf.d/00-modsecurity.conf
+RUN printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;' \
+      > /etc/nginx/modules-enabled/50-modsecurity.conf \
+ && printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_headers_more_filter_module.so;' \
+      > /etc/nginx/modules-enabled/51-headers-more.conf \
+ && sed -i '1iload_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;' /etc/nginx/nginx.conf \
+ && sed -i '1iload_module /usr/lib/nginx/modules/ngx_http_headers_more_filter_module.so;' /etc/nginx/nginx.conf \
+ && rm -f /usr/lib/libmodsecurity.so /usr/lib/libmodsecurity.so.3 \
+ && ln -s libmodsecurity.so.3.0.16 /usr/lib/libmodsecurity.so.3 \
+ && ln -s libmodsecurity.so.3 /usr/lib/libmodsecurity.so \
+ && ldconfig
+
+RUN curl -fsSL "https://github.com/coreruleset/coreruleset/releases/download/${CRS_VERSION}/coreruleset-${CRS_VERSION#v}-minimal.tar.gz" \
+  | tar -xz --strip-components=1 -C /etc/modsecurity/crs
 EXPOSE 80 443

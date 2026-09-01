@@ -1,0 +1,22 @@
+THIRD-PARTY NOTICES
+
+This image includes the following open-source components:
+
+OWASP ModSecurity Core Rule Set (CRS) v4.25.1
+License: Apache License 2.0
+Source: https://github.com/coreruleset/coreruleset
+The complete CRS license is included at /etc/modsecurity/crs/LICENSE.
+
+OWASP ModSecurity v3.0.16
+License: Apache License 2.0
+Source: https://github.com/owasp-modsecurity/ModSecurity
+
+ModSecurity-nginx connector v1.0.4
+License: Apache License 2.0
+Source: https://github.com/owasp-modsecurity/ModSecurity-nginx
+
+headers-more-nginx-module
+License: BSD 2-Clause License
+Source: https://github.com/openresty/headers-more-nginx-module
+
+Each component remains subject to its upstream copyright and license notices.

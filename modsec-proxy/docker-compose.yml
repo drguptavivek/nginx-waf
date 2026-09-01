@@ -12,8 +12,7 @@ services:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL}
       - STAGING=${STAGING:-1}
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/00-modsecurity.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/conf.d/security_headers.conf:/etc/nginx/conf.d/10-security_headers.conf:ro
       - ./nginx/sites-available:/etc/nginx/sites-available:ro
       - ./nginx/sites-enabled:/etc/nginx/sites-enabled:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
