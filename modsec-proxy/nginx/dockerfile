@@ -26,7 +26,7 @@ RUN set -eux; installed="$(nginx -v 2>&1 | sed 's#^nginx version: nginx/##')"; \
 
 FROM ${NGINX_CERTBOT_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libcurl4 libgeoip1 liblmdb0 libmaxminddb0 libxml2 libyajl2 \
+      libcurl4t64 libgeoip1t64 liblmdb0 libmaxminddb0 libxml2 libyajl2 \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /usr/lib/nginx/modules /etc/nginx/modules-enabled /etc/modsecurity
 COPY --from=build /usr/lib/libmodsecurity.so* /usr/lib/
