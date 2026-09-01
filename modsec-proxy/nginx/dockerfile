@@ -35,7 +35,9 @@ ARG CRS_VERSION=v4.25.1
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl libcurl4t64 libgeoip1t64 liblmdb0 libmaxminddb0 libxml2 libyajl2 \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /usr/lib/nginx/modules /etc/nginx/modules-enabled /etc/modsecurity/crs/rules /usr/share/doc/nginx-modsecurity
+ && mkdir -p /usr/lib/nginx/modules /etc/nginx/modules-enabled \
+      /etc/modsecurity/crs/rules /etc/modsecurity/custom.d /etc/modsecurity/vhosts \
+      /etc/modsecurity/rules /usr/share/doc/nginx-modsecurity
 COPY --from=build /usr/lib/libmodsecurity.so* /usr/lib/
 COPY --from=build /usr/src/nginx-1.31.4/objs/ngx_http_modsecurity_module.so /usr/lib/nginx/modules/
 COPY --from=build /usr/src/nginx-1.31.4/objs/ngx_http_headers_more_filter_module.so /usr/lib/nginx/modules/
