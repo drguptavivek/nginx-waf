@@ -1,0 +1,64 @@
+
+#  rsyslog splitter ON DOCKER HOST 
+Create /etc/rsyslog.d/30-modsec-split.conf on the host (use absolute paths):
+Replace /ABS/PATH/TO with the real absolute path to your project (e.g., /srv/modsec-stack).
+
+
+```ini
+module(load="imfile")
+
+# --- NGINX error.log → only hard blocks (“Access denied”) ---
+input(type="imfile"
+      File="/ABS/PATH/TO/logs/nginx/error.log"
+      Tag="nginx-error:"
+      addMetadata="on"
+      ruleset="modsec_blocks")
+
+ruleset(name="modsec_blocks") {
+  if $msg contains "ModSecurity: Access denied" then {
+    action(type="omfile" file="/ABS/PATH/TO/logs/modsec/blocked.log")
+  }
+  stop
+}
+
+# --- ModSecurity audit JSON → full detections stream ---
+input(type="imfile"
+      File="/ABS/PATH/TO/logs/modsec/audit.log"
+      Tag="modsec-audit:"
+      addMetadata="on"
+      ruleset="modsec_detections")
+
+ruleset(name="modsec_detections") {
+  action(type="omfile" file="/ABS/PATH/TO/logs/modsec/detections.log")
+}
+```
+
+
+Enable:
+```bash
+sudo systemctl restart rsyslog
+```
+
+
+## Logrotate (host)
+
+/etc/logrotate.d/modsecurity:
+
+```ini
+/ABS/PATH/TO/logs/modsec/*.log {
+  daily
+  rotate 14
+  missingok
+  notifempty
+  compress
+  delaycompress
+  create 0640 root root
+  sharedscripts
+  postrotate
+    # poke nginx to reopen logs (safe even in container bind-mount case)
+    /bin/kill -HUP $(pidof nginx) 2>/dev/null || true
+  endscript
+}
+
+
+

@@ -1,0 +1,15 @@
+.DS_Store
+.env
+**/.env
+**/data/
+**/logs/
+**/*.log
+**/audit.json
+*.zip
+
+# Local/deployment-specific configuration
+modsec-proxy/modsec/custom.d/services.yaml.yml
+modsec-proxy/modsec/vhosts/
+modsec-proxy/nginx/sites-available/
+modsec-proxy/nginx/sites-enabled/
+modsec-proxy/nginx/ssl/
