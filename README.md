@@ -11,7 +11,7 @@ headers-more, and pinned OWASP CRS.
 - ModSecurity-nginx `v1.0.4`
 - OWASP CRS `v4.25.1` LTS
 
-Images target `linux/amd64`, `linux/386`, `linux/arm64`, and `linux/arm/v7`.
+Images target `linux/amd64` and `linux/arm64`.
 CRS is Apache-2.0 licensed; see `modsec-proxy/nginx/THIRD-PARTY-NOTICES`.
 
 ## Pull and run
