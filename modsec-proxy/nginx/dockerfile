@@ -1,75 +1,35 @@
-# ------------------------------------------------------------------------------
-# Stage 1: build libmodsecurity (v3), nginx, modsecurity connector, headers_more
-# ------------------------------------------------------------------------------
 ARG NGINX_CERTBOT_IMAGE=jonasal/nginx-certbot:6.2.0-nginx1.31.4
-FROM ubuntu:24.04 AS build
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Build dependencies
-RUN apt-get update && apt-get install -y \
-    git build-essential autoconf automake libtool pkg-config \
-    libpcre3-dev libxml2-dev libyajl-dev zlib1g-dev libcurl4-openssl-dev \
-    libgeoip-dev liblmdb-dev libmaxminddb-dev libssl-dev ca-certificates wget \
- && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /opt
-
+FROM ${NGINX_CERTBOT_IMAGE} AS build
+ARG NGINX_VERSION=1.31.4
 ARG MODSECURITY_VERSION=v3.0.16
 ARG MODSECURITY_NGINX_VERSION=v1.0.4
 
-# --- libmodsecurity v3 (engine) ---
-RUN git clone --branch ${MODSECURITY_VERSION} --depth 1 https://github.com/owasp-modsecurity/ModSecurity.git \
- && cd ModSecurity \
- && git submodule update --init --recursive \
- && ./build.sh \
- && ./configure \
- && make -j"$(nproc)" \
- && make install
-
-# --- fetch nginx and modules ---
-ARG NGINX_VER=1.31.4
-RUN git clone --branch ${MODSECURITY_NGINX_VERSION} --depth 1 https://github.com/owasp-modsecurity/ModSecurity-nginx.git
-RUN git clone --depth 1 https://github.com/openresty/headers-more-nginx-module.git
-RUN wget -q http://nginx.org/download/nginx-${NGINX_VER}.tar.gz \
- && tar xzf nginx-${NGINX_VER}.tar.gz
-
-# --- build nginx with modsecurity connector + headers_more ---
-WORKDIR /opt/nginx-${NGINX_VER}
-RUN ./configure \
-      --with-compat \
-      --with-http_ssl_module \
-      --with-http_v2_module \
-      --with-http_gzip_static_module \
-      --with-file-aio \
-      --add-module=../ModSecurity-nginx \
-      --add-module=../headers-more-nginx-module \
- && make -j"$(nproc)" \
- && make install
-
-# ------------------------------------------------------------------------------
-# Stage 2: runtime image (no configs included; you will bind-mount your own)
-# ------------------------------------------------------------------------------
-FROM ${NGINX_CERTBOT_IMAGE}
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Minimal runtime deps
-RUN apt-get update && apt-get install -y \
-    ca-certificates tzdata \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    autoconf automake build-essential ca-certificates curl git libcurl4-openssl-dev \
+    libgeoip-dev liblmdb-dev libmaxminddb-dev libpcre2-dev libtool libxml2-dev \
+    libyajl-dev pkg-config zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy nginx and libmodsecurity
-COPY --from=build /usr/local/nginx /usr/local/nginx
-COPY --from=build /usr/local/lib/libmodsecurity.so* /usr/local/lib/
-RUN ldconfig
+WORKDIR /usr/src
+RUN git clone --branch "${MODSECURITY_VERSION}" --depth 1 https://github.com/owasp-modsecurity/ModSecurity.git \
+ && cd ModSecurity && git submodule update --init --recursive && ./build.sh \
+ && ./configure --prefix=/usr && make -j"$(nproc)" && make install
 
-# Create expected paths ONLY (no configs are written here)
-RUN mkdir -p \
-    /etc/nginx /etc/nginx/conf.d /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/ssl \
-    /etc/modsecurity /etc/modsecurity/rules /etc/modsecurity/custom.d \
-    /var/log/nginx /var/log/modsecurity
+RUN set -eux; installed="$(nginx -v 2>&1 | sed 's#^nginx version: nginx/##')"; \
+    test "${installed}" = "${NGINX_VERSION}"; \
+    curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"; \
+    tar -xzf "nginx-${NGINX_VERSION}.tar.gz"; \
+    git clone --branch "${MODSECURITY_NGINX_VERSION}" --depth 1 https://github.com/owasp-modsecurity/ModSecurity-nginx.git; \
+    cd "nginx-${NGINX_VERSION}"; args="$(nginx -V 2>&1 | sed -n 's/^configure arguments: //p')"; \
+    eval "./configure ${args} --with-compat --add-dynamic-module=/usr/src/ModSecurity-nginx"; \
+    make modules; test -s objs/ngx_http_modsecurity_module.so
 
-# Expose common ports (optional)
+FROM ${NGINX_CERTBOT_IMAGE}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libcurl4 libgeoip1 liblmdb0 libmaxminddb0 libxml2 libyajl2 \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /usr/lib/nginx/modules /etc/nginx/modules-enabled /etc/modsecurity
+COPY --from=build /usr/lib/libmodsecurity.so* /usr/lib/
+COPY --from=build /usr/src/nginx-1.31.4/objs/ngx_http_modsecurity_module.so /usr/lib/nginx/modules/
+RUN printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;' > /etc/nginx/modules-enabled/50-modsecurity.conf && ldconfig
 EXPOSE 80 443
-
-# NGINX in foreground; it will use whatever /etc/nginx/nginx.conf you bind-mount
-CMD ["/usr/local/nginx/sbin/nginx","-g","daemon off;"]
